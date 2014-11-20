@@ -7,13 +7,16 @@
 using namespace std;
 using namespace cv;
 
+cv::Mat1b skin_model;
+
 /// Constructor
 SkinModel::SkinModel()
 {
 }
 
+
 /// Destructor
-SkinModel::~SkinModel() 
+SkinModel::~SkinModel()
 {
 }
 
@@ -23,6 +26,8 @@ SkinModel::~SkinModel()
 /// Use this function to initialize/clear data structures used for training the skin model.
 void SkinModel::startTraining()
 {
+    skin_model = cv::Mat1b::zeros(0, 0);
+    cout<<skin_model<<endl;
     //--- IMPLEMENT THIS ---//
 }
 
