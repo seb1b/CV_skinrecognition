@@ -1,8 +1,11 @@
 #include "skinmodel.h"
 #include <cmath>
 #include <iostream>
+#include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/highgui/highgui.hpp"
 
 using namespace std;
+using namespace cv;
 
 /// Constructor
 SkinModel::SkinModel()
@@ -31,6 +34,8 @@ void SkinModel::startTraining()
 void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
 {
 	//--- IMPLEMENT THIS ---//
+    
+    //train with mixture of gaussians
 }
 
 /// Finish the training.  This finalizes the model.  Do not call
@@ -72,6 +77,18 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
         }
     }
 
+    //by seb
+    //modify in order to change impact of opening closing
+    cv::Mat element = getStructuringElement( 1, cv::Size( 13, 13 ), cv::Point( 6, 6 ) );
+    
+    //erosion and dilation to reduce mistakes
+    //first morphological closing (delatation -> erosion) and then opening (erosion -> delatation)
+    //MORPH_CLOSE 3     MORPH_OPEN 2
+    cv::morphologyEx( skin, skin, MORPH_CLOSE, element);
+    cv::morphologyEx( skin, skin, MORPH_OPEN, element);
+    
+    
+    
     return skin;
 }
 

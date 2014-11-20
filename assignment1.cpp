@@ -89,6 +89,8 @@ int main(int argc, char* argv[]) {
 		cv::Mat1b hyp = model.classify(img);
 
 		cv::Mat1b mask = cv::imread(path+"/test/mask-"+f,0);
+        //seb
+        imwrite( "images/"+f, hyp);
 
 		for (int i=0; i<hyp.rows; i++)
 			for (int j=0; j<hyp.cols; j++)
