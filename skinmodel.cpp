@@ -16,6 +16,7 @@ cv::Mat1b skin_model;
 
 cv::Mat hist_skin;
 cv::Mat hist_no_skin;
+cv::Mat decision_rule;
 int hist_counter;
 
 /// Constructor
@@ -72,33 +73,21 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
     // Use the o-th and 1-st channels
     int channels[] = { 0, 1 };
     
-    
-    /// Histograms
-    Mat temp_hist_skin;
-    Mat temp_hist_no_skin;
-    
     /// Calculate the histograms for the HSV images
-    calcHist( &hsv, 1, channels, mask, temp_hist_skin, 2, histSize, ranges, true, false );
+    calcHist( &hsv, 1, channels, mask, hist_skin, 2, histSize, ranges, true, true );
     
-    calcHist( &hsv, 1, channels, ~mask, temp_hist_no_skin, 2, histSize, ranges, true, false );
+    calcHist( &hsv, 1, channels, ~mask, hist_no_skin, 2, histSize, ranges, true, true );
     
     
     //imshow("asd", temp_hist_skin);
     //imshow("no skin", temp_hist_no_skin);
-
+    
     //cout << temp_hist_skin <<endl;
     //waitKey(0);
-    if(hist_counter == 0){
-    hist_skin = temp_hist_skin;
-    hist_no_skin = temp_hist_no_skin;
-    }else{
-        hist_skin += temp_hist_skin;
-        hist_no_skin += temp_hist_no_skin;
     
-    }
-   // normalize( hist_base, hist_base, 0, 1, NORM_MINMAX, -1, Mat() );
-
-	//--- IMPLEMENT THIS ---//
+    // normalize( hist_base, hist_base, 0, 1, NORM_MINMAX, -1, Mat() );
+    
+    //--- IMPLEMENT THIS ---//
     
     //train with mixture of gaussians
     hist_counter++;
@@ -112,29 +101,35 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
 void SkinModel::finishTraining()
 {
     
-   cout << hist_skin.size() << endl;
+    //cout << hist_skin.size() << endl;
+    //cout << hist_skin << endl;
     
-    cout << hist_skin << endl;
     
-    imshow("asd", hist_skin);
-    imshow("no skin", hist_no_skin);
+    //normalize histogramm
+    normalize(hist_skin,  hist_skin, 1, 1, NORM_L1, -1, Mat());
+    normalize(hist_no_skin,  hist_no_skin, 1, 1, NORM_L1, -1, Mat());
+    
+    decision_rule = (hist_skin > hist_no_skin);
+    cout << "Normalized: " << hist_skin.size() << endl;
+    //cout << hist_skin << endl;
+    
     
     //cout << temp_hist_skin <<endl;
-    waitKey(0);
+    //waitKey(0);
     
     //cvNormalizeHist(hist_skin,1);
     
-   /* for (int ubin=0; ubin < hist_bins[0]; ubin++) {
-        for (int vbin = 0; vbin < hist_bins[1]; vbin++) {
-            if (skin_hist.at<float>(ubin,vbin) > 0) {
-                skin_hist.at<float>(ubin,vbin) /= skin_pixels;
-            }
-            if (non_skin_hist.at<float>(ubin,vbin) > 0) {
-                non_skin_hist.at<float>(ubin,vbin) /= non_skin_pixels;
-            }
-        }
-    */
-	//--- IMPLEMENT THIS ---//
+    /* for (int ubin=0; ubin < hist_bins[0]; ubin++) {
+     for (int vbin = 0; vbin < hist_bins[1]; vbin++) {
+     if (skin_hist.at<float>(ubin,vbin) > 0) {
+     skin_hist.at<float>(ubin,vbin) /= skin_pixels;
+     }
+     if (non_skin_hist.at<float>(ubin,vbin) > 0) {
+     non_skin_hist.at<float>(ubin,vbin) /= non_skin_pixels;
+     }
+     }
+     */
+    //--- IMPLEMENT THIS ---//
 }
 
 
@@ -146,38 +141,49 @@ void SkinModel::finishTraining()
 cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
 {
     cv::Mat1b skin = cv::Mat1b::zeros(img.rows, img.cols);
-
-	//--- IMPLEMENT THIS ---//
+    //get HSV
+    Mat hsv;
+    cvtColor(img, hsv, CV_BGR2HSV);
+    //--- IMPLEMENT THIS ---//
     for (int row = 0; row < img.rows; ++row) {
         for (int col = 0; col < img.cols; ++col) {
-
-			if (false)
-				skin(row, col) = rand()%256;
-
-			if (false)
-				skin(row, col) = img(row,col)[2];
-
-			if (true) {
-			
-				cv::Vec3b bgr = img(row, col);
-				if (bgr[2] > bgr[1] && bgr[1] > bgr[0]) 
-					skin(row, col) = 2*(bgr[2] - bgr[0]);
-			}
+            //Martina
+            if (true) {
+                cv::Vec3b pixel = hsv.at<cv::Vec3b>(row, col);
+                float h_bin_size = 180.0/50.0;
+                float s_bin_size = 256.0/60.0;
+                int h = pixel[0]/h_bin_size;
+                int s = pixel[1]/s_bin_size;
+                if (decision_rule.at<int>(s, h) > 1) {
+                    skin(row, col) = 255;
+                }
+            }
+            if (false)
+                skin(row, col) = rand()%256;
+            
+            if (false)
+                skin(row, col) = img(row,col)[2];
+            
+            if (false) {
+                
+                cv::Vec3b bgr = img(row, col);
+                if (bgr[2] > bgr[1] && bgr[1] > bgr[0])
+                    skin(row, col) = 2*(bgr[2] - bgr[0]);
+            }
         }
     }
-
+    
     //by seb
     //modify in order to change impact of opening closing
-    cv::Mat element = getStructuringElement( 1, cv::Size( 6, 6 ), cv::Point( 2, 2 ) );
+    cv::Mat element = getStructuringElement( 1, cv::Size( 13, 13 ), cv::Point( 6, 6 ) );
     
     //erosion and dilation to reduce mistakes
     //first morphological closing (delatation -> erosion) and then opening (erosion -> delatation)
     //MORPH_CLOSE 3     MORPH_OPEN 2
-    cv::morphologyEx( skin, skin, MORPH_CLOSE, element);
-    cv::morphologyEx( skin, skin, MORPH_OPEN, element);
+    //cv::morphologyEx( skin, skin, MORPH_CLOSE, element);
+    //cv::morphologyEx( skin, skin, MORPH_OPEN, element);
     
     
     
     return skin;
 }
-
