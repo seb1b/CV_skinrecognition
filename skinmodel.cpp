@@ -17,6 +17,8 @@ cv::Mat1b skin_model;
 cv::Mat hist_skin;
 cv::Mat hist_no_skin;
 cv::Mat decision_rule;
+double prior_skin;
+double prior_no_skin;
 int hist_counter;
 
 /// Constructor
@@ -103,14 +105,17 @@ void SkinModel::finishTraining()
     
     //cout << hist_skin.size() << endl;
     //cout << hist_skin << endl;
-    
+    double skin_hist_sum = cv::sum(hist_skin)[0];
+    double no_skin_hist_sum = cv::sum(hist_no_skin)[0];
+    prior_skin = skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
+    prior_no_skin = no_skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
     
     //normalize histogramm
     normalize(hist_skin,  hist_skin, 1, 1, NORM_L1, -1, Mat());
     normalize(hist_no_skin,  hist_no_skin, 1, 1, NORM_L1, -1, Mat());
     
     decision_rule = (hist_skin > hist_no_skin);
-    cout << "Normalized: " << hist_skin.size() << endl;
+    //cout << "Normalized: " << hist_skin.size() << endl;
     //cout << hist_skin << endl;
     
     
@@ -154,7 +159,7 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
                 float s_bin_size = 256.0/60.0;
                 int h = pixel[0]/h_bin_size;
                 int s = pixel[1]/s_bin_size;
-                if (decision_rule.at<int>(s, h) > 1) {
+                if (((hist_skin.at<int>(s, h)*prior_skin) / prior_no_skin) > ((hist_no_skin.at<int>(s, h)*prior_no_skin) / prior_skin)) {
                     skin(row, col) = 255;
                 }
             }
