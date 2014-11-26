@@ -3,6 +3,7 @@
 #include <iostream>
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include <math.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -170,6 +171,7 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
     Mat hsv;
     cvtColor(img, hsv, CV_BGR2HSV);
     //--- IMPLEMENT THIS ---//
+    cout << "classify"<< endl;
     for (int row = 0; row < img.rows; ++row) {
         for (int col = 0; col < img.cols; ++col) {
             //Martina
@@ -202,18 +204,18 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
                 double det_cov = determinant(skin_Covar);
                 Mat cov_inv = skin_Covar.inv();
                 
-                double first_ = 0.5 * sqrt(det_cov);
+                double first_ = 1/(2 * M_PI) * 1/sqrt(det_cov);
                 Mat exp_ = -0.5 * x_mu * cov_inv * x_mu_t;
                 double exponent = exp_.at<double>(0,0);
 
                 
                 
                 double probab = first_ * exp(exponent);
-   
+                cout << probab << endl;
                // waitKey(0);
                
                 if (probab > 0) {
-                    skin(row, col) = 1;
+                    skin(row, col) = 255;
                 }
             }
             
@@ -244,7 +246,7 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
     cv::morphologyEx( skin, skin, MORPH_CLOSE, element);
     cv::morphologyEx( skin, skin, MORPH_OPEN, element);
     
-    
+    cout << "classify_end"<< endl;
     
     return skin;
 }
