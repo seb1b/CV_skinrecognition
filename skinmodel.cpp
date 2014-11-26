@@ -26,6 +26,7 @@ int hist_counter;
 
 
 cv::Mat skin_Covar, skin_Mu;
+cv::Mat no_skin_Covar, no_skin_Mu;
 Mat skin_gauss;
 Mat no_skin_gauss;
 
@@ -63,7 +64,7 @@ void SkinModel::startTraining()
 void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
 {
     
-    int blur_size = 3;
+    int blur_size = 9;
     //get HSV
     Mat hsv;
     cvtColor(img, hsv, CV_BGR2HSV);
@@ -76,32 +77,30 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
         for (int col = 0; col < hsv.cols; ++col) {
             
             cv::Vec3b hsv_ = hsv.at<cv::Vec3b>(row, col);
-
+            
             
             double h__ = (double)hsv_[0];
             double s__ = (double)hsv_[1];
-           
-            double temp [] = {h__, s__};
-            Mat hs_row = Mat(1,2,  CV_64F,temp);
             
-            if(mask.at<int>(row, col) >0){
+            double temp [] = {h__, s__};
+            Mat hs_row = Mat(1, 2,  CV_64F, temp);
+            
+            if(mask.at<int>(row, col) > 0){
                 
                 skin_gauss.push_back(hs_row);
-            
+                
             }else{
                 no_skin_gauss.push_back(hs_row);
             }
             
-            
-            
         }
-    
+        
     }
     /*
-    vector<Mat> hsv_planes;
-    split( hsv, hsv_planes );
-    hsv_planes[0].mul(mask/255);
-    */
+     vector<Mat> hsv_planes;
+     split( hsv, hsv_planes );
+     hsv_planes[0].mul(mask/255);
+     */
     
     /// Using 50 bins for hue and 60 for saturation
     int h_bins = 50; int s_bins = 60;
@@ -122,6 +121,7 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
     calcHist( &hsv, 1, channels, ~mask, hist_no_skin, 2, histSize, ranges, true, true );
     
     hist_counter++;
+    
 }
 
 /// Finish the training.  This finalizes the model.  Do not call
@@ -134,28 +134,28 @@ void SkinModel::finishTraining()
     
     //calcualte cov and mean of skin
     cv::calcCovarMatrix(skin_gauss,skin_Covar, skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
-
+    
     
     
     //calcualte cov and mean of no _skin
-    cv::Mat Covar_, Mu_;
-    cv::calcCovarMatrix(no_skin_gauss,Covar_, Mu_, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
-   // waitKey(0);
-
+    cv::calcCovarMatrix(no_skin_gauss, no_skin_Covar, no_skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
     
-
-    double skin_hist_sum = cv::sum(hist_skin)[0];
-    double no_skin_hist_sum = cv::sum(hist_no_skin)[0];
-    prior_skin = skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
-    prior_no_skin = no_skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
+    //cout << "mu : " << skin_Mu << ", mu no skin: " << no_skin_Mu << endl;
+    //cout << "cov : " << skin_Covar << ", cov no skin: " << no_skin_Covar << endl;
     
-    //normalize histogramm
-    normalize(hist_skin,  hist_skin, 1, 1, NORM_L1, -1, Mat());
-    normalize(hist_no_skin,  hist_no_skin, 1, 1, NORM_L1, -1, Mat());
+    /*
+     double skin_hist_sum = cv::sum(hist_skin)[0];
+     double no_skin_hist_sum = cv::sum(hist_no_skin)[0];
+     prior_skin = skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
+     prior_no_skin = no_skin_hist_sum / (skin_hist_sum + no_skin_hist_sum);
+     
+     //normalize histogramm
+     normalize(hist_skin,  hist_skin, 1, 1, NORM_L1, -1, Mat());
+     normalize(hist_no_skin,  hist_no_skin, 1, 1, NORM_L1, -1, Mat());
+     
+     decision_rule = (hist_skin > hist_no_skin);
+     */
     
-    decision_rule = (hist_skin > hist_no_skin);
-
- 
 }
 
 
@@ -175,46 +175,59 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
     for (int row = 0; row < img.rows; ++row) {
         for (int col = 0; col < img.cols; ++col) {
             //Martina
-            if (false) {
+            if (true) {
                 cv::Vec3b pixel = hsv.at<cv::Vec3b>(row, col);
                 float h_bin_size = 180.0/50.0;
                 float s_bin_size = 256.0/60.0;
                 int h = ((int)pixel[0])/h_bin_size;
                 int s = ((int)pixel[1])/s_bin_size;
-               // cout << "prior no skin"<< << endl;
-                if (((hist_skin.at<int>(s, h)*prior_skin) / prior_no_skin) > ((hist_no_skin.at<int>(s, h)*prior_no_skin) / prior_skin)) {
+                //if (((hist_skin.at<int>(h, s)*prior_skin) / prior_no_skin) > ((hist_no_skin.at<int>(h, s)*prior_no_skin) / prior_skin)) {
+                //if ((hist_skin.at<int>(h, s) / hist_no_skin.at<int>(h, s)) > (prior_no_skin / prior_skin)) {
+                if (hist_skin.at<int>(h, s) > hist_no_skin.at<int>(h, s)) {
                     skin(row, col) = 255;
                 }
             }
             
             //Seb gauss
-            if (true) {
+            if (false) {
                 //for skin use formular slide 31
                 cv::Vec3b pixel = hsv.at<cv::Vec3b>(row, col);
                 double h = pixel[0];
                 double s = pixel[1];
                 double temp [] = {h, s};
-                Mat x = Mat(1,2,  CV_64F,temp);
-     
-               
-                Mat x_mu = x - skin_Mu;
-                Mat x_mu_t = x_mu.t();
+                Mat x = Mat(1, 2,  CV_64F, temp);
                 
                 
-                double det_cov = determinant(skin_Covar);
-                Mat cov_inv = skin_Covar.inv();
-                
-                double first_ = 1/(2 * M_PI) * 1/sqrt(det_cov);
-                Mat exp_ = -0.5 * x_mu * cov_inv * x_mu_t;
-                double exponent = exp_.at<double>(0,0);
-
+                Mat x_mu_skin = x - skin_Mu;
+                Mat x_mu_skin_t = x_mu_skin.t();
                 
                 
-                double probab = first_ * exp(exponent);
-                cout << probab << endl;
-               // waitKey(0);
-               
-                if (probab > 0) {
+                double det_cov_skin = determinant(skin_Covar);
+                Mat cov_inv_skin = skin_Covar.inv();
+                
+                double first_skin = 1/(2 * M_PI) * 1/sqrt(det_cov_skin);
+                Mat exp_skin = -0.5 * x_mu_skin * cov_inv_skin * x_mu_skin_t;
+                double exponent_skin = exp_skin.at<double>(0,0);
+                
+                double prob_skin = first_skin * exp(exponent_skin);
+                
+                Mat x_mu_no_skin = x - no_skin_Mu;
+                Mat x_mu_no_skin_t = x_mu_no_skin.t();
+                
+                
+                double det_cov_no_skin = determinant(no_skin_Covar);
+                Mat cov_inv_no_skin = no_skin_Covar.inv();
+                
+                double first_no_skin = 1/(2 * M_PI) * 1/sqrt(det_cov_no_skin);
+                Mat exp_no_skin = -0.5 * x_mu_no_skin * cov_inv_no_skin * x_mu_no_skin_t;
+                double exponent_no_skin = exp_no_skin.at<double>(0,0);
+                
+                
+                double prob_no_skin = first_no_skin * exp(exponent_no_skin);
+                //cout << prob_skin << ", " << prob_no_skin << endl;
+                // waitKey(0);
+                
+                if (prob_skin > 0.0001) {
                     skin(row, col) = 255;
                 }
             }
