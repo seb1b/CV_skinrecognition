@@ -3,12 +3,8 @@
 #include <iostream>
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
-#include <math.h>
-
+//#include <math.h>
 #include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/video/video.hpp>
-#include <opencv2/features2d/features2d.hpp>
 
 using namespace std;
 using namespace cv;
@@ -30,6 +26,11 @@ cv::Mat no_skin_Covar, no_skin_Mu;
 Mat skin_gauss;
 Mat no_skin_gauss;
 
+int morph_elem = 0;
+int morph_size = 1;
+int blur_size =9;
+bool gauss_on = false;
+
 /// Constructor
 SkinModel::SkinModel()
 {
@@ -49,11 +50,7 @@ void SkinModel::startTraining()
 {
     skin_model = cv::Mat1b::zeros(0, 0);
     hist_counter = 0;
-    //hist_skin;
-    //hist_noskin;
     
-    cout<<skin_model<<endl;
-    //--- IMPLEMENT THIS ---//
 }
 
 /// Add a new training image/mask pair.  The mask should
@@ -64,7 +61,7 @@ void SkinModel::startTraining()
 void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
 {
     
-    int blur_size = 9;
+    
     //get HSV
     Mat hsv;
     cvtColor(img, hsv, CV_BGR2HSV);
@@ -73,28 +70,30 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
     GaussianBlur(hsv, hsv, Size(blur_size, blur_size), 0, 0);
     
     //Seb with gauss
-    for (int row = 0; row < hsv.rows; ++row) {
-        for (int col = 0; col < hsv.cols; ++col) {
-            
-            cv::Vec3b hsv_ = hsv.at<cv::Vec3b>(row, col);
-            
-            
-            double h__ = (double)hsv_[0];
-            double s__ = (double)hsv_[1];
-            
-            double temp [] = {h__, s__};
-            Mat hs_row = Mat(1, 2,  CV_64F, temp);
-            
-            if(mask.at<int>(row, col) > 0){
+    if(gauss_on){
+        for (int row = 0; row < hsv.rows; ++row) {
+            for (int col = 0; col < hsv.cols; ++col) {
                 
-                skin_gauss.push_back(hs_row);
+                cv::Vec3b hsv_ = hsv.at<cv::Vec3b>(row, col);
                 
-            }else{
-                no_skin_gauss.push_back(hs_row);
+                
+                double h__ = (double)hsv_[0];
+                double s__ = (double)hsv_[1];
+                
+                double temp [] = {h__, s__};
+                Mat hs_row = Mat(1, 2,  CV_64F, temp);
+                
+                if(mask.at<int>(row, col) > 0){
+                    
+                    skin_gauss.push_back(hs_row);
+                    
+                }else{
+                    no_skin_gauss.push_back(hs_row);
+                }
+                
             }
             
         }
-        
     }
     /*
      vector<Mat> hsv_planes;
@@ -132,13 +131,16 @@ void SkinModel::train(const cv::Mat3b& img, const cv::Mat1b& mask)
 void SkinModel::finishTraining()
 {
     
-    //calcualte cov and mean of skin
-    cv::calcCovarMatrix(skin_gauss,skin_Covar, skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
+    if(gauss_on){
+        //calcualte cov and mean of skin
+        cv::calcCovarMatrix(skin_gauss,skin_Covar, skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
+        
+        
+        
+        //calcualte cov and mean of no _skin
+        cv::calcCovarMatrix(no_skin_gauss, no_skin_Covar, no_skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
+    }
     
-    
-    
-    //calcualte cov and mean of no _skin
-    cv::calcCovarMatrix(no_skin_gauss, no_skin_Covar, no_skin_Mu, CV_COVAR_NORMAL | CV_COVAR_ROWS |CV_COVAR_SCALE );
     
     //cout << "mu : " << skin_Mu << ", mu no skin: " << no_skin_Mu << endl;
     //cout << "cov : " << skin_Covar << ", cov no skin: " << no_skin_Covar << endl;
@@ -170,8 +172,9 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
     //get HSV
     Mat hsv;
     cvtColor(img, hsv, CV_BGR2HSV);
+    GaussianBlur(hsv, hsv, Size(blur_size, blur_size), 0, 0);
     //--- IMPLEMENT THIS ---//
-    cout << "classify"<< endl;
+    //cout << "classify"<< endl;
     for (int row = 0; row < img.rows; ++row) {
         for (int col = 0; col < img.cols; ++col) {
             //Martina
@@ -183,6 +186,7 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
                 int s = ((int)pixel[1])/s_bin_size;
                 //if (((hist_skin.at<int>(h, s)*prior_skin) / prior_no_skin) > ((hist_no_skin.at<int>(h, s)*prior_no_skin) / prior_skin)) {
                 //if ((hist_skin.at<int>(h, s) / hist_no_skin.at<int>(h, s)) > (prior_no_skin / prior_skin)) {
+                
                 if (hist_skin.at<int>(h, s) > hist_no_skin.at<int>(h, s)) {
                     skin(row, col) = 255;
                 }
@@ -224,10 +228,10 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
                 
                 
                 double prob_no_skin = first_no_skin * exp(exponent_no_skin);
-                //cout << prob_skin << ", " << prob_no_skin << endl;
+                // cout << prob_skin << ", " << prob_no_skin << endl;
                 // waitKey(0);
                 
-                if (prob_skin > 0.0001) {
+                if (prob_skin > 0.0000000001) {
                     skin(row, col) = 255;
                 }
             }
@@ -249,9 +253,11 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
         }
     }
     
-    //by seb
+    
     //modify in order to change impact of opening closing
-    cv::Mat element = getStructuringElement( 1, cv::Size( 13, 13 ), cv::Point( 6, 6 ) );
+    // cv::Mat element = getStructuringElement( 1, cv::Size( 13, 13 ), cv::Point( 6, 6 ) );
+    Mat element = getStructuringElement( morph_elem, Size( 2*morph_size + 1, 2*morph_size+1 ), Point( morph_size, morph_size ) );
+    
     
     //erosion and dilation to reduce mistakes
     //first morphological closing (delatation -> erosion) and then opening (erosion -> delatation)
@@ -259,7 +265,7 @@ cv::Mat1b SkinModel::classify(const cv::Mat3b& img)
     cv::morphologyEx( skin, skin, MORPH_CLOSE, element);
     cv::morphologyEx( skin, skin, MORPH_OPEN, element);
     
-    cout << "classify_end"<< endl;
+    //cout << "classify_end"<< endl;
     
     return skin;
 }
